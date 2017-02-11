@@ -1,0 +1,565 @@
+Data preparation
+Mydata <- read.csv("./completeimpdata.csv")
+set.seed(100)
+
+spl <- sample.split(Mydata$CHURN,0.70)
+train <-  subset(Mydata, spl == TRUE)
+test <-  subset(Mydata, spl == FALSE)
+
+Logistic
+
+#Logistic Regression
+#logmodelm = glm(CHURN~REVENUE+MOU+RECCHRGE+DIRECTAS+ROAM+CUSTCARE+DROPBLK+MONTHS+EQPDAYS+UNIQSUBS+RETCALLS, data=train, family = binomial)
+#summary(logmodelm)
+#predlogm = predict(logmodelm, newdata = test, type = "response")
+#table(predlogm>0.5, test$CHURN)
+#predlog13 = rep("0", length(predlogm))
+#predlog13[predlogm>0.5] = "1"
+#mean(predlog12!=test$CHURN)
+#Hence 71% accuracy
+
+#Logistic Regression model by applying variables from XGBoost algo
+
+logmodeln = glm(CHURN~MODELS+CHANGEM+CHANGER+OVERAGE+ REVENUE+MOU+MOUREC+RECCHRGE+ROAM+EQPDAYS+RETCALL+INCALLS, data=train, family = binomial)
+summary(logmodeln)
+predlogn = predict(logmodeln, newdata = test, type = "response")
+table(predlogn>0.5,test$CHURN)
+predlog12 = rep("0", length(predlogn))
+predlog12[predlogn>0.5] = "1"
+mean(predlog12==test$CHURN)
+#Hence 71% accuracy
+# Cross validation for logistic regression
+
+numFolds = trainControl(method="cv",number=10) 
+cpGrid= expand.grid(.cp=seq(0.01,0.5,0.01))
+train(CHURN ~ MODELS+CHANGEM+CHANGER+OVERAGE+ REVENUE+MOU+MOUREC+RECCHRGE+ROAM+EQPDAYS+RETCALL+INCALLS, data = train, method="glm",family=binomial,trControl=numFolds,tuneLength=cpGrid)
+
+# Plotting the ROC Curve and AUC value 
+LogReg = prediction(predlogn,test$CHURN) 
+LogPerf = performance(LogReg,"tpr", "fpr") 
+plot(LogPerf) 
+#AUC Value 
+as.numeric(performance(LogReg, "auc")@y.values)
+
+LDA 
+LDAModel = lda(CHURN ~ (MODELS+CHANGEM+MOU+CHANGER+OVERAGE+RECCHRGE+REVENUE+MOUREC+EQPDAYS+RETCALL+ROAM+INCALLS),data = train)
+
+# Confusion Matrix
+
+predLDA = predict(LDAModel,test)
+table(predLDA$class, test$CHURN)
+##	
+##         0 	1
+##   0 14913  5976
+##   1   218   207
+# Misclassification rate
+
+mean(predLDA$class != test$CHURN)
+## [1] 0.2906071
+ 
+# Cross validation of LDA Model
+
+LDA_KFolds = trainControl(method="cv",number=10)
+LDA_cpGrid= expand.grid(.cp=seq(0.01,0.5,0.01))
+train$CHURN= as.factor(train$CHURN)
+train(CHURN ~ MODELS+CHANGEM+MOU+CHANGER+OVERAGE+RECCHRGE+REVENUE+MOUREC+EQPDAYS+RETCALL+ROAM+INCALLS,data= train, method="lda",family="binomial",trControl= LDA_KFolds,tuneLength= LDA_cpGrid)
+## Linear Discriminant Analysis
+##
+## 49733 samples
+##	12 predictor
+## 	2 classes: '0', '1'
+
+## No pre-processing
+## Resampling: Cross-Validated (10 fold)
+## Summary of sample sizes: 44761, 44760, 44759, 44759, 44759, 44760, ...
+## Resampling results:
+##
+##   Accuracy   Kappa	 
+##   0.7098705  0.02534393
+
+# ROC curve for LDA model
+
+ROCR.Pred = prediction(predLDA$posterior[,2],test$CHURN)
+ROCR.Perf = performance(ROCR.Pred, "tpr", "fpr")
+
+#Plotting the ROC curve
+
+plot(ROCR.Perf, print.cutoffs.at=seq(0,1,0.1), col = "green")
+#Calculating area under the curve for the same
+
+auc_lda = as.numeric(performance(ROCR.Pred,"auc")@y.values)
+auc_lda
+## [1] 0.6015501
+
+QDA
+QDAModel = qda(CHURN ~ (MODELS+CHANGEM+MOU+CHANGER+OVERAGE+RECCHRGE+REVENUE+MOUREC+EQPDAYS+RETCALL+ROAM+INCALLS), data = train)
+
+## Confusion matrix
+
+predQDA = predict(QDAModel,test)
+table(predQDA$class, test$CHURN)
+##	
+##         0 	1
+##   0 14286  5615
+##   1   845   568
+#Misclassification Rate
+
+mean(predQDA$class != test$CHURN)
+## [1] 0.3030872
+From the confusion matrix we can see that total true negative and true positive values are 845 and 568 and the false negative and false. positive values are 14286 and 5615 respectively which makes error rate 30.03%.
+ 
+## Cross validation with QDA
+
+QDA_KFolds = trainControl(method="cv",number=10)
+QDA_cpGrid= expand.grid(.cp=seq(0.01,0.5,0.01))
+train$CHURN= as.factor(train$CHURN)
+train(CHURN ~ (MODELS+CHANGEM+MOU+CHANGER+OVERAGE+RECCHRGE+REVENUE+MOUREC+EQPDAYS+RETCALL+ROAM+INCALLS),data= train, method="qda",family="binomial",trControl= QDA_KFolds,tuneLength= QDA_cpGrid)
+## Quadratic Discriminant Analysis
+##
+## 49733 samples
+##	12 predictor
+## 	2 classes: '0', '1'
+##
+## No pre-processing
+## Resampling: Cross-Validated (10 fold)
+## Summary of sample sizes: 44759, 44761, 44761, 44760, 44759, 44759, ...
+## Resampling results:
+##
+##   Accuracy  Kappa 	
+##   0.69656   0.04471604
+##
+##
+#ROCR FOR QDA
+
+ROCR.QDAPred = prediction(predQDA$posterior[,2],test$CHURN)
+
+ROCR.QDAPerf = performance(ROCR.QDAPred, "tpr", "fpr")
+
+#Plotting the ROC curve
+
+plot(ROCR.QDAPerf, print.cutoffs.at= seq(0,1,0.1),col = "blue")
+#Calculating area under the curve for the same
+
+auc_qda = as.numeric(performance(ROCR.QDAPred,"auc")@y.values)
+auc_qda
+## [1] 0.5867226
+KNN
+knnTrainTarget = train[,22]
+knnTestTarget = test[,22]
+
+knnTrain = train[,c('MODELS','CHANGEM','MOU','CHANGER','OVERAGE','RECCHRGE','REVENUE','MOUREC','EQPDAYS','RETCALL','ROAM','INCALLS')]
+
+knnTest = test[,c('MODELS','CHANGEM','MOU','CHANGER','OVERAGE','RECCHRGE','REVENUE','MOUREC','EQPDAYS','RETCALL','ROAM','INCALLS')]
+
+# k=1
+set.seed(1000)
+
+knnmodel = knn(train = knnTrain, test = knnTest, cl = knnTrainTarget, k =1, prob = TRUE,use.all = TRUE )
+
+table(knnmodel,test$CHURN)
+##     	
+## knnmodel     0 	1
+##    	0 11118  4194
+##    	1  4013  1989
+#Misclassification rate
+mean(knnmodel != test$CHURN)
+## [1] 0.3850521
+# k = 5
+
+knn5model = knn(train = knnTrain, test = knnTest, cl = knnTrainTarget, k =5, prob = TRUE,use.all = TRUE )
+
+table(knn5model,test$CHURN)
+##      	
+## knn5model     0 	1
+##     	0 12946  4846
+##         1  2185  1337
+#Misclassification rate
+mean(knn5model != test$CHURN)
+## [1] 0.3298771
+# k = 10
+
+knn10model = knn(train = knnTrain, test = knnTest, cl = knnTrainTarget, k =10, prob = TRUE,use.all = TRUE )
+
+table(knn10model,test$CHURN)
+##       	
+## knn10model     0 	1
+##      	0 13654  5142
+##          1  1477  1041
+#Misclassification rate
+mean(knn10model != test$CHURN)
+## [1] 0.3105471
+# k = 20
+
+knn20model = knn(train = knnTrain, test = knnTest, cl = knnTrainTarget, k =20, prob = TRUE,use.all = TRUE )
+
+table(knn20model,test$CHURN)
+##       	
+## knn20model     0 	1
+##      	0 14349  5494
+##          1   782   689
+#Misclassification rate
+mean(knn20model != test$CHURN)
+## [1] 0.3104543
+# k = 40
+set.seed(1000)
+knn40model = knn(train = knnTrain, test = knnTest, cl = knnTrainTarget, k =40, prob = TRUE,use.all = TRUE )
+
+table(knn40model,test$CHURN)
+##       	
+## knn40model     0 	1
+##          0 14710  5737
+##          1   421   446
+#Misclassification rate
+mean(knn40model != test$CHURN)
+## [1] 0.3089181
+ 
+##Best K  Model
+# The KNN best solution is with k=30 which has a misclassification rate of 30.4%.
+ 
+## Cross validation for KNN
+set.seed(100)
+KNN_ctrl =  trainControl(method="repeatedcv",repeats = 3)
+train(as.factor(CHURN) ~ MODELS+CHANGEM+MOU+CHANGER+OVERAGE+RECCHRGE+REVENUE+MOUREC+EQPDAYS+RETCALL+ROAM+INCALLS, data = train, method = "knn", trControl = KNN_ctrl, preProcess = c("center","scale"), tuneLength = 20)
+ 
+## ROC for k nearest neighbor
+knnpred_roc = knn(knnTrain, knnTest, knnTrainTarget, k = 40, prob = TRUE)
+prob = attr(knnpred_roc, "prob")
+knn.prob = ifelse(knnpred_roc == "0", 1-prob, prob)
+
+pred_knn = prediction(knn.prob, test$CHURN)
+pred_knn2 <- performance(pred_knn, "tpr", "fpr")
+
+plot(pred_knn2)
+
+#Calculating area under the curve for the same
+auc_knn = as.numeric(performance(pred_knn,"auc")@y.values)
+auc_knn
+## [1] 0.6032202
+
+Decision tree
+form=(CHURN ~ MODELS+CHANGEM+CHANGER+OVERAGE+ REVENUE+MOU+MOUREC+RECCHRGE+ROAM+EQPDAYS+RETCALL+INCALLS)
+dt = rpart(formula=form, data=train, control=rpart.control(minsplit=1, minbucket=1, cp=0.001))
+prp(dt)
+dtpredict = predict(dt,test,type="class")
+table(dtpredict, test$CHURN)
+(14854+342)/(14854+342+277+5841)
+#Accuracy of 71.30
+dtpredict
+
+numFolds = trainControl(method="cv",number=10) 
+cpGrid= expand.grid(.cp=seq(0.01,0.5,0.01)) 
+train(form,data= train, method="rpart",trControl=numFolds,tuneGrid=cpGrid)
+
+#AUC for decision tree
+dtpredict2 = predict(dt,test)
+pred2 = prediction(dtpredict2[,2],test$CHURN) 
+perf2 = performance(pred2, "tpr", "fpr") 
+plot(perf2)
+as.numeric(performance(pred2,"auc")@y.values)
+
+Random forest
+sforest= randomForest(formula= form, data = train, nodesize= 25, ntree= 200) 
+sforest
+PredictForest = predict(sforest, newdata = test)
+head(PredictForest)
+table(test$CHURN, PredictForest)
+(14618+650)/(14618+650+5533+513)
+Y = train[,"CHURN"]
+X =train[,c("MODELS","CHANGEM","CHANGER","OVERAGE","REVENUE","MOU","MOUREC","RECCHRGE","ROAM","EQPDAYS","RETCALL","INCALLS")] 
+
+#We get an accuracy of 71.63%
+numFolds = trainControl(method="cv",number=10,savePredictions = TRUE, verboseIter = TRUE) 
+
+train(x = X , y = Y, method="rf",trControl = numFolds, preProcess = c("center","scale"), ntree = 50)
+library(e1071)
+
+#ROC AND AUC
+PredictForest = predict(sforest, newdata = test, type = "prob")
+pred3 = prediction(PredictForest[,2],test$CHURN) 
+perf3 = performance(pred3, "tpr", "fpr") 
+plot(perf3)
+as.numeric(performance(pred3,"auc")@y.values)
+
+
+XGBoost
+library(xgboost)
+library(Deriv)
+library(ggplot2)
+library(pROC)
+
+# preparation ========================================
+MYpal <- colorRampPalette(c("#772c2a","#ffff00"))  # maroon yellow
+fulldata <- read.csv("customerchurn.csv")
+
+## set train/test data
+set.seed(100)
+trainrows <- sample(nrow(fulldata), floor(0.7*nrow(fulldata)))
+traind <- fulldata[trainrows,]
+testd <- fulldata[-trainrows,]
+
+## make matrices
+mtrain_adv<-as(as.matrix(traind[1:20000,c(-22,-51)]),"sparseMatrix")
+mtest_adv<-as(as.matrix(traind[20001:28000,c(-22,-51)]),"sparseMatrix") 
+
+## make watchlist
+trlabels<-traind$CHURN[1:20000]
+telabels<-traind$CHURN[20001:28000]
+dtrain_adv <- xgb.DMatrix(data=mtrain_adv, label=trlabels)
+dtest_adv <- xgb.DMatrix(data=mtest_adv, label=telabels)
+watchlist <- list(train=dtrain_adv, test=dtest_adv)
+
+# train ===========================================
+
+## Cross Validation
+param <- list("objective" = "binary:logistic",
+              "eval_metric" = "logloss",
+              "nthread" = 8,   # number of threads to be used 
+              "max_depth" = 16,    # maximum depth of tree 
+              "eta" = 0.2,    # step size shrinkage 
+              "gamma" = 0,    # minimum loss reduction 
+              "subsample" = 0.3,    # part of data instances to grow tree 
+              "colsample_bytree" = 1,  # subsample ratio of columns when constructing each tree 
+              "min_child_weight" = 12  # minimum sum of instance weight needed in a child 
+)
+bst_cv <- xgb.cv(param=param, data=mtrain, label=traind$CHURN, nfold=4, nrounds=150, early_stopping_rounds = 5, prediction=TRUE, verbose=FALSE)
+which.min(bst_cv$evaluation_log[, test_logloss_mean])
+
+## Alternate method, with watchlist
+bstadv <- xgb.train(data=dtrain_adv, max_depth=8, eta=0.08, nthread = 4, min_child_weight=15, subsample=0.3, colsample_bytree=1, gamma=12, early_stopping_rounds = 10, nround=200, watchlist=watchlist, objective = "binary:logistic",missing=NaN)
+
+# plots: training ======================================
+
+# plot the test-errors of train-test model that used a watchlist
+xx<-c(1:bstadv$niter)
+xx2<-ifelse(xx>0,xx,NaN)
+yy<-unlist(log(bstadv$evaluation_log[1:bstadv$niter,3]))
+logEstimate <- lm(yy~log(xx2))
+
+## colorize based on slope of tangent
+slopesdf<-data.frame("Iteration"=xx, "TestError"=yy,"Slope"=ifelse(xx>0,coef(logEstimate)[2]/xx,0))
+lastvals<-slopesdf[slopesdf$Iteration>0.1,]
+lastcols<-MYpal(15)[as.numeric(cut(lastvals$Slope,breaks = 15))]
+slopesdf$Colors<-c( (rep("black",nrow(slopesdf)-nrow(lastvals))),lastcols  )
+plot(xx,yy,xlab="Iteration", ylab="Test-error",cex.lab=1.2, col=slopesdf$Colors,main="Logarithmic change in test error")
+curve(coef(logEstimate)[1]+coef(logEstimate)[2]*log(x),add=TRUE,col="black")
+
+# prediction =======================================
+predbst <- predict(bstadv, mtest)
+prediction <- as.numeric(predbst > 0.5)
+m_xgb<-mean(prediction == testd$CHURN)
+
+# plots: testing =======================================
+## ROC
+r2<-roc(testd$CHURN,prediction)
+plot(r2,xlim=c(1,0),ylim=c(0,1),col="#772c2a",auc.polygon=TRUE,auc.polygon.col="#772c2a77",main="XGBoost ROC curve")
+
+## Features
+im <- xgb.importance(names(traind),model=bstadv)
+mtodf <- data.frame(im)
+mtodf <- mtodf[order(mtodf$Gain),][c(floor(nrow(mtodf)/4):nrow(mtodf)),]
+g<-grep("^CHURN$",mtodf$Feature)
+mtodf <- mtodf[c(-g),]
+mtodf$Factor <- as.numeric(cut(sort(mtodf$Gain),breaks = 10))
+mtodf$Colors <- MYpal(10)[mtodf$Factor]
+mtodf$LineColors <- MYpal(10)[10-((mtodf$Factor+9)%%10)] 
+ggplot(mtodf, aes(x = reorder(mtodf$Feature, mtodf$Gain), y=mtodf$Gain)) + geom_bar(stat="identity",fill=mtodf$Colors,col="black") + coord_flip() + xlab("Feature") + ylab("Importance") + ggtitle("Feature importance extracted from gradient boosting")
+Neural Networks
+library("neuralnet")
+library(caret)
+library(caTools)
+library(MASS)
+library(pROC)
+
+# prep =======================
+POpal <- colorRampPalette(c("#c841eb","#ff9933"))  # fuschia orng
+BGYpal <- colorRampPalette(c("#00cc99","#ffff00"))  # blugn yell
+MYpal <- colorRampPalette(c("#772c2a88","#ffff00"))  # maroon yellow
+fulldata <- read.csv("customerchurn.csv")
+attach(fulldata)
+
+## set train/test data
+set.seed(100)
+trainrows <- sample(nrow(fulldata), floor(0.7*nrow(fulldata)))
+traind <- fulldata[trainrows,]
+testd <- fulldata[-trainrows,]
+
+## normalize for better NN results
+normalize<-function(x){
+  # avoid dividing by 0...
+  if((max(x)-min(x))!=0){
+    (x-min(x))/(max(x)-min(x))
+  }
+  else{x}
+}
+
+train2<-as.data.frame(apply(traind,2,normalize))
+test2<-as.data.frame(apply(testd,2,normalize))
+
+## make list of indexes of the variables we use
+## need this for matrix later
+names<-c("MODELS","CHANGEM","MOU","OVERAGE","CHANGER","REVENUE","RECCHRGE","OPEAKVCE","EQPDAYS","INCALLS")
+indxs <- integer(length(names))
+for (i in c(1:length(names))){
+  indxs[i]<-grep(paste("^",names[i],"$", sep=""), colnames(train2))
+}
+
+# train =======================
+mynn<-neuralnet(CHURN~MODELS+CHANGEM+MOU+OVERAGE+CHANGER+REVENUE+RECCHRGE+PEAKVCE+EQPDAYS+INCALLS,err.fct="sse",hidden=c(4,2),linear.output=FALSE,data=train2,threshold=0.03,stepmax=1e+7)
+
+## show results
+plot(mynn,fontsize=8,radius=0.2,col.entry.synapse="black",col.entry="#00cc99", col.hidden="green", col.intercept="#1d7bd3", col.hidden.synapse="black", col.out="#ff9933",show.weights=T)
+mynn$weights
+mynn$result.matrix
+mynn$covariate
+mynn$net.result
+
+## calculate error
+MCE <- mean(train2$CHURN!=vec1)
+nn1<-as.numeric(mynn$net.result[[1]] > 0.5)
+vec1<-c(nn1)
+
+# test =======================
+pred<-compute(mynn,ttest2[,c(indxs)])
+nn2<-as.numeric(pred$net.result > 0.5)
+vec2<-c(nn2)
+MCE2 <- mean(ttest2$CHURN!=vec2)
+
+## plot results
+r1<-roc(train2$CHURN,vec1)
+r2<-roc(test2$CHURN,vec2)
+
+plot(r1,col="#B38917",auc.polygon=TRUE,auc.polygon.col="#B3891777",main="Neural Network ROC curve")
+legend(1,1,legend=c("Train","Test"),col=c("#B38917","#ffff00"),lwd=0.5)
+plot(r2,add=TRUE,col="#ffff00",auc.polygon=TRUE,auc.polygon.col="#ffff0044")
+
+
+PCA
+cleandatalatest <- read.csv("/Users/rklarpit/Documents/Arpitbackup/EDA/Project/completeimpdata.csv")
+
+library(ggplot2)
+library(mlbench)
+library(caret)
+library(caTools)
+library(Dmisc)
+library(ggfortify)
+library(SDMTools)
+library(caret)
+library(MASS)
+
+
+
+ValidationData <- subset(cleandatalatest, is.na(CHURNDEP))
+ModelData <- subset(cleandatalatest, CHURNDEP >= 0)
+set.seed(100)
+spl <- sample.split(ModelData$CHURNDEP,0.70)
+train <-  subset(ModelData, spl == TRUE)
+test <-  subset(ModelData, spl == FALSE)
+dim(train)
+str(train)
+summary(sapply(train, as.factor))
+
+#Principle Component Analysis
+
+which(apply(subset(train, select = -c(CHURNDEP, CHURN )), 2, var)==0)
+fit <- prcomp(na.omit(subset(train, select = -c(CHURN)) ), na.action=na.omit, cor = TUR, scale = TRUE)
+#The prcomp function returns an object of class prcomp, which have some methods available. The print method returns the standard deviation for every Principle Component, and their rotation (or loadings), which are the coefficients of the linear combinations of the continuous variables
+#The plot method returns a plot of the variances (y-axis) associated with the PCs (x-axis). The plot shows us that we will be using 45 principle components for analysis
+
+plot(fit, type = "lines")
+print(head(fit))
+autoplot(fit, colour = "AGE1")
+biplot(fit, scale =0)
+str_dev <- fit$sdev
+pr_var <- str_dev^2
+pr_var[1:10]
+prop_varex <- pr_var/sum(pr_var)
+prop_varex[1:20]
+plot(prop_varex, xlab = "Principal Component",
+     ylab = "Proportion of Variance Explained",
+     type = "b")
+plot(cumsum(prop_varex), xlab = "Principal Component",
+     ylab = "Cumulative Proportion of Variance Explained",
+     type = "b")
+
+abline(h = 0.98,col = "red")
+abline(v=45, col = "blue")
+
+#add a training set with principal components
+train.data <- data.frame(CHURN = (na.omit(train))$CHURN, fit$x)
+
+#we are interested in first 30 PCAs
+train.data <- train.data[,1:45]
+
+#run a decision tree
+
+library(rpart)
+rpart.model <- rpart(CHURN~.,data = train.data, method = "anova")
+varImp(rpart.model)
+
+train.data <- train.data[,1:45]
+
+rpart.model <- rpart(CHURN~.,data = train.data, method = "anova")
+varImp(rpart.model)
+#transform test into PCA
+test.data <- predict(fit, newdata = test)
+test.data <- as.data.frame(test.data)
+
+#select the first 30 components
+train.data <- data.frame(CHURN = (na.omit(train))$CHURN, fit$x)
+test.data <- test.data[,1:45]
+
+#make prediction on test data
+test$rpart.prediction <- predict(rpart.model, test.data)
+
+confusion.matrix(test$CHURN, test$rpart.prediction, threshold = 0.5)
+#accuracytest = (5601+5547)/(5601+5547+453+399)
+#accuracytest
+#accuracy comes out to be 92.9%
+
+
+cleandatalatest <- read.csv("/Users/rklarpit/Documents/Arpitbackup/EDA/Project/completeimpdata.csv")
+
+library(ggplot2)
+library(mlbench)
+library(caret)
+library(caTools)
+library(Dmisc)
+library(ggfortify)
+library(SDMTools)
+library(caret)
+library(MASS)
+
+
+ValidationData <- subset(cleandatalatest, is.na(CHURNDEP))
+ModelData <- subset(cleandatalatest, CHURNDEP >= 0)
+set.seed(100)
+spl <- sample.split(ModelData$CHURNDEP,0.70)
+train <-  subset(ModelData, spl == TRUE)
+test <-  subset(ModelData, spl == FALSE)
+dim(train)
+str(train)
+summary(sapply(train, as.factor))
+
+Lasso and Ridge
+x <- as.matrix(subset(train, select = -c(CHURN, CHURNDEP)))
+y <- as.matrix(train[,"CHURN"])
+x.test <- as.matrix(subset(test, select = -c(CHURN, CHURNDEP)))
+#This model is fitted by calling the glmnet function with alpha value equal to 0
+fit.ridge=glmnet(x,y,alpha=0)
+plot(fit.ridge,xvar="lambda",label=TRUE) 
+#Cross Validation
+#glmnet's built-in function -CV.glmnet is used for cross validation
+cv.ridge=cv.glmnet(x,y,alpha=0)
+plot(cv.ridge)
+fit.lasso=glmnet(x,y,alpha=1)
+plot(fit.lasso,xvar="lambda",label=TRUE)
+
+plot(fit.lasso,xvar="dev",label=TRUE)
+#This section shows how to do model selection using cross validation function cv.glmnet()
+
+cv.lasso=cv.glmnet(x,y)
+plot(cv.lasso)
+
+coef(cv.lasso)
+# The output has 21 non zero coefficients which shows that the function has chosen the second vertical line for cross validation
+
